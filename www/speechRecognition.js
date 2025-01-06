@@ -20,5 +20,5 @@ module.exports = {
   },
   averagePowerForChannel0: function (successCallback, errorCallback) {
     cordova.exec(successCallback, errorCallback, 'SpeechRecognition', 'averagePowerForChannel0', []);
-  }
+  },
 };

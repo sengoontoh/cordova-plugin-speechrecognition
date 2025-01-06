@@ -43,15 +43,18 @@ public class SpeechRecognition extends CordovaPlugin {
   private static final String GET_SUPPORTED_LANGUAGES = "getSupportedLanguages";
   private static final String HAS_PERMISSION = "hasPermission";
   private static final String REQUEST_PERMISSION = "requestPermission";
+  private static final String AVERAGE_POWER_CHANNEL0 = "averagePowerForChannel0";
   private static final int MAX_RESULTS = 5;
   private static final String NOT_AVAILABLE = "Speech recognition service is not available on the system.";
   private static final String MISSING_PERMISSION = "Missing permission";
 
   private JSONArray mLastPartialResults = new JSONArray();
+  private float lastRmsdB = 0.0f;
 
   private static final String RECORD_AUDIO_PERMISSION = Manifest.permission.RECORD_AUDIO;
 
   private CallbackContext callbackContext;
+  private CallbackContext rmsCallbackContext;
   private LanguageDetailsChecker languageDetailsChecker;
   private Activity activity;
   private Context context;
@@ -78,8 +81,6 @@ public class SpeechRecognition extends CordovaPlugin {
 
   @Override
   public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
-    this.callbackContext = callbackContext;
-
     Log.d(LOG_TAG, "execute() action " + action);
 
     try {
@@ -115,7 +116,10 @@ public class SpeechRecognition extends CordovaPlugin {
         mLastPartialResults = new JSONArray();
         Boolean showPartial = args.optBoolean(3, false);
         Boolean showPopup = args.optBoolean(4, true);
-        startListening(lang, matches, prompt,showPartial, showPopup);
+
+        // Store recognition callback
+        this.callbackContext = callbackContext;
+        startListening(lang, matches, prompt, showPartial, showPopup);
 
         return true;
       }
@@ -135,6 +139,7 @@ public class SpeechRecognition extends CordovaPlugin {
       }
 
       if (GET_SUPPORTED_LANGUAGES.equals(action)) {
+        this.callbackContext = callbackContext;
         getSupportedLanguages();
         return true;
       }
@@ -145,7 +150,26 @@ public class SpeechRecognition extends CordovaPlugin {
       }
 
       if (REQUEST_PERMISSION.equals(action)) {
+        this.callbackContext = callbackContext;
         requestAudioPermission();
+        return true;
+      }
+
+      if (AVERAGE_POWER_CHANNEL0.equals(action)) {
+        if (!isRecognitionAvailable()) {
+          callbackContext.error(NOT_AVAILABLE);
+          return true;
+        }
+        if (!audioPermissionGranted(RECORD_AUDIO_PERMISSION)) {
+          callbackContext.error(MISSING_PERMISSION);
+          return true;
+        }
+
+        // Store RMS callback separately
+        rmsCallbackContext = callbackContext;
+        PluginResult result = new PluginResult(PluginResult.Status.OK, lastRmsdB);
+        result.setKeepCallback(true);
+        rmsCallbackContext.sendPluginResult(result);
         return true;
       }
 
@@ -267,6 +291,7 @@ public class SpeechRecognition extends CordovaPlugin {
 
     @Override
     public void onBeginningOfSpeech() {
+      lastRmsdB = 0.0f;
     }
 
     @Override
@@ -275,13 +300,31 @@ public class SpeechRecognition extends CordovaPlugin {
 
     @Override
     public void onEndOfSpeech() {
+      // Clear RMS callback when speech ends
+      if (rmsCallbackContext != null) {
+        rmsCallbackContext.success();
+        rmsCallbackContext = null;
+      }
+      lastRmsdB = 0.0f;
     }
 
     @Override
     public void onError(int errorCode) {
       String errorMessage = getErrorText(errorCode);
       Log.d(LOG_TAG, "Error: " + errorMessage);
-      callbackContext.error(errorMessage);
+
+      // Send error to recognition callback
+      if (callbackContext != null) {
+        callbackContext.error(errorMessage);
+      }
+
+      // Also send error to RMS callback if active
+      if (rmsCallbackContext != null) {
+        rmsCallbackContext.error(errorMessage);
+        rmsCallbackContext = null;
+      }
+
+      lastRmsdB = 0.0f;
     }
 
     @Override
@@ -311,6 +354,7 @@ public class SpeechRecognition extends CordovaPlugin {
     @Override
     public void onReadyForSpeech(Bundle params) {
       Log.d(LOG_TAG, "onReadyForSpeech");
+      lastRmsdB = 0.0f;
     }
 
     @Override
@@ -318,16 +362,38 @@ public class SpeechRecognition extends CordovaPlugin {
       ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
       Log.d(LOG_TAG, "SpeechRecognitionListener results: " + matches);
       try {
+        // Send final results to recognition callback
         JSONArray jsonMatches = new JSONArray(matches);
         callbackContext.success(jsonMatches);
+
+        // Clear RMS callback since recognition is complete
+        if (rmsCallbackContext != null) {
+          rmsCallbackContext.success();
+          rmsCallbackContext = null;
+        }
+
+        lastRmsdB = 0.0f;
       } catch (Exception e) {
         e.printStackTrace();
         callbackContext.error(e.getMessage());
+
+        // Also send error to RMS callback if active
+        if (rmsCallbackContext != null) {
+          rmsCallbackContext.error(e.getMessage());
+          rmsCallbackContext = null;
+        }
       }
     }
 
     @Override
     public void onRmsChanged(float rmsdB) {
+      lastRmsdB = rmsdB;
+      // Send RMS update if we have a callback
+      if (rmsCallbackContext != null) {
+        PluginResult result = new PluginResult(PluginResult.Status.OK, rmsdB);
+        result.setKeepCallback(true);
+        rmsCallbackContext.sendPluginResult(result);
+      }
     }
 
     private String getErrorText(int errorCode) {
@@ -367,5 +433,4 @@ public class SpeechRecognition extends CordovaPlugin {
       return message;
     }
   }
-
 }
