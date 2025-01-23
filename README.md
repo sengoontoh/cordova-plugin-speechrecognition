@@ -126,6 +126,15 @@ window.plugins.speechRecognition.requestPermission(
 
 This method requests access permission to system resources if it was not granted before.
 
+### averagePowerForChannel0()
+
+```js
+window.plugins.speechRecognition.averagePowerForChannel0(
+  Function successCallback, Function errorCallback) 
+```js
+
+The audio channel’s current average power. The returned value ranges from –160 dBFS, indicating minimum power, to 0 dBFS, indicating maximum power.
+Result of success callback is a `Double`.
 
 ### Ionic Usage
 

@@ -6,6 +6,7 @@
 
 #import <Cordova/CDV.h>
 #import <Speech/Speech.h>
+#import <Accelerate/Accelerate.h>
 
 #define DEFAULT_LANGUAGE @"en-US"
 #define DEFAULT_MATCHES 5
@@ -23,6 +24,7 @@
 @property (strong, nonatomic) AVAudioEngine *audioEngine;
 @property (strong, nonatomic) SFSpeechAudioBufferRecognitionRequest *recognitionRequest;
 @property (strong, nonatomic) SFSpeechRecognitionTask *recognitionTask;
+@property float averagePowerForChannel0;
 
 @end
 
@@ -81,8 +83,8 @@
         }
 
         AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-        [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker error:nil];
-        [audioSession setMode:AVAudioSessionModeDefault error:nil];
+        [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord error:nil];
+        [audioSession setMode:AVAudioSessionModeMeasurement error:nil];
         [audioSession setActive:YES withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation error:nil];
 
         self.recognitionRequest = [[SFSpeechAudioBufferRecognitionRequest alloc] init];
@@ -145,13 +147,13 @@
 
         [inputNode installTapOnBus:0 bufferSize:1024 format:format block:^(AVAudioPCMBuffer *buffer, AVAudioTime *when) {
             [self.recognitionRequest appendAudioPCMBuffer:buffer];
+            [buffer setFrameLength:1024];
+            [self audioMetering:buffer];
         }];
 
         [self.audioEngine prepare];
         [self.audioEngine startAndReturnError:nil];
-
     }];
-
 }
 
 - (void)stopListening:(CDVInvokedUrlCommand*)command {
@@ -237,6 +239,23 @@
             }];
         });
     }];
+}
+
+- (void)averagePowerForChannel0:(CDVInvokedUrlCommand*)command {
+    CDVPluginResult *pluginResult = nil;
+    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDouble:self.averagePowerForChannel0];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+}
+
+- (void)audioMetering:(AVAudioPCMBuffer*)buffer {
+    UInt32 inNumberFrames = buffer.frameLength;
+    if (buffer.format.channelCount > 0) {
+        Float32* samples = (Float32*)buffer.floatChannelData[0];
+        Float32 avgValue = 0;
+        vDSP_meamgv((Float32*)samples, 1, &avgValue, inNumberFrames);
+        double value = avgValue != 0 ? log10f(avgValue) * 20 : 0;
+        self.averagePowerForChannel0 = value;
+    }
 }
 
 @end
