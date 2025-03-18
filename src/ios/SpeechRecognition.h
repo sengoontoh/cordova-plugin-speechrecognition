@@ -3,6 +3,7 @@
 
 @interface SpeechRecognition : CDVPlugin
 
+- (void)deactivateAudioSession:(CDVInvokedUrlCommand*)command;
 - (void)isRecognitionAvailable:(CDVInvokedUrlCommand*)command;
 - (void)startListening:(CDVInvokedUrlCommand*)command;
 - (void)stopListening:(CDVInvokedUrlCommand*)command;

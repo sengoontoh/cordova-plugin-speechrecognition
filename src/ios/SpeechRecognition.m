@@ -31,6 +31,23 @@
 
 @implementation SpeechRecognition
 
+- (void)setupAudioSession {
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    [audioSession setActive:NO withOptions:0 error:nil];
+    [audioSession setCategory:AVAudioSessionCategoryRecord
+                  withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker
+                        error:nil];
+    [audioSession setMode:AVAudioSessionModeMeasurement error:nil];
+    [audioSession setActive:YES withOptions:0 error:nil];
+}
+
+- (void)deactivateAudioSession:(CDVInvokedUrlCommand*)command {
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    [audioSession setActive:NO withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation error:nil];
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+}
+
 - (void)isRecognitionAvailable:(CDVInvokedUrlCommand*)command {
     CDVPluginResult *pluginResult = nil;
 
@@ -81,12 +98,9 @@
             [self.recognitionTask cancel];
             self.recognitionTask = nil;
         }
-
-        AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-        [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord error:nil];
-        [audioSession setMode:AVAudioSessionModeMeasurement error:nil];
-        [audioSession setActive:YES withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation error:nil];
-
+        
+        [self setupAudioSession];
+        
         self.recognitionRequest = [[SFSpeechAudioBufferRecognitionRequest alloc] init];
         self.recognitionRequest.shouldReportPartialResults = showPartial;
 
@@ -164,7 +178,7 @@
             [self.audioEngine stop];
             [self.recognitionRequest endAudio];
         }
-
+        
         CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
     }];
