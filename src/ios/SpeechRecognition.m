@@ -34,8 +34,8 @@
 - (void)setupAudioSession {
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     [audioSession setActive:NO withOptions:0 error:nil];
-    [audioSession setCategory:AVAudioSessionCategoryRecord
-                  withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker
+    [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord
+                  withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker | AVAudioSessionCategoryOptionDuckOthers
                         error:nil];
     [audioSession setMode:AVAudioSessionModeMeasurement error:nil];
     [audioSession setActive:YES withOptions:0 error:nil];
@@ -46,6 +46,11 @@
     [audioSession setActive:NO withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation error:nil];
     CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+}
+
+- (void)deactivateAudioSession {
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    [audioSession setActive:NO withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation error:nil];
 }
 
 - (void)isRecognitionAvailable:(CDVInvokedUrlCommand*)command {
@@ -141,6 +146,8 @@
                 self.recognitionRequest = nil;
                 self.recognitionTask = nil;
 
+                [self deactivateAudioSession];
+
                 CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:error.description];
                 if (showPartial){
                     [pluginResult setKeepCallbackAsBool:YES];
@@ -156,6 +163,8 @@
 
                 self.recognitionRequest = nil;
                 self.recognitionTask = nil;
+                
+                [self deactivateAudioSession];
             }
         }];
 
@@ -178,6 +187,8 @@
             [self.audioEngine stop];
             [self.recognitionRequest endAudio];
         }
+        
+        [self deactivateAudioSession];
         
         CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
