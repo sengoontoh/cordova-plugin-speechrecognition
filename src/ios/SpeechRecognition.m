@@ -172,6 +172,9 @@
                     [self deactivateAudioSession];
                 }
             }];
+
+            // Remove any existing tap on the bus first
+            [inputNode removeTapOnBus:0];
             
             NSLog(@"startListening() installTapOnBus");
             
